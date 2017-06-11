@@ -15,11 +15,10 @@
 #Include "MathLib" as ML
 #Include "TextLib" as TL
 
-#Setting S_TimeLimit 0 as _("Time Limit :")
-#Setting  ShowTop10 True	as _("Show Top 10")
+#Setting	S_TimeLimit	0 		as _("Time Limit :")
+#Setting	ShowTop10 	False	as _("Show Top 10")
 
 #Const Description _("""$fff In $f00Platform$fff mode you need to finish the map while accumulating the $ff0least amount of respawns while finishing the most times$fff.""")
-
 #Const C_BotsNb 0
 
   //-------------------------------//
@@ -29,6 +28,31 @@
 ***Match_LogVersion***
 ***
 MB_LogVersion(ScriptName, Version);
+***
+
+***Match_Settings***
+***
+MB_Settings_UseDefaultHud = True;
+***
+
+***Match_Rules***
+***
+ModeInfo::SetName("Platform");
+ModeInfo::SetType(ModeInfo::C_Type_FreeForAll);
+ModeInfo::SetRules(Description);
+ModeInfo::SetStatusMessage(_("TYPE: Free for all\nOBJECTIVE: Set the least amount of respawns while having the most finishes."));
+***
+
+***Match_LoadHud***
+***
+//Hud_Load(C_HudModulePath);
+MB_SortScores(CTmMode::ETmScoreSortOrder::BestRace_NbRespawns);
+
+// Initialize UI modules
+UI::LoadModules([
+	UIModules::C_Module_SpeedAndDistance,
+	UIModules::C_Module_Countdown
+]);
 ***
 
 ***Match_InitMap***
@@ -49,6 +73,7 @@ foreach (Player in Players) {
 	TM::StartRace(Player, StartTime);
 	
 }
+
 Layers::Create("PlatformUI", PlatformUI());
 Layers::SetType("PlatformUI", CUILayer::EUILayerType::Normal);
 Layers::Attach("PlatformUI");
@@ -86,12 +111,15 @@ foreach (Event in PendingEvents) {
 			FurthestCheckpointReached_NbRespawns = Event.NbRespawns;
 		}
 	}
-	if (Event.Type == CTmModeEvent::EType::WayPoint && Event.IsEndRace) {
+	if (/*Event.Type == CTmModeEvent::EType::WayPoint && */Event.IsEndRace) {
 			declare Player <=> Event.Player;
 			declare NbRespawns = Player.CurRace.NbRespawns;
 			declare Time = Player.CurRace.Time;
-			declare IsInvalidRace = (Event.RaceTime == 0);
-			//TM::EndRace(Event.Player);
+		
+			//ScoresSort = True;
+			TM::EndRace(Event.Player);
+		
+			/*declare IsInvalidRace = (Event.RaceTime == 0);
 			if (Time == Event.RaceTime || IsInvalidRace && (NbRespawns == Event.NbRespawns || IsInvalidRace)) {
 				continue;
 			} else {		
@@ -99,9 +127,9 @@ foreach (Event in PendingEvents) {
 			if (IsInvalidRace) {
 				Message::SendBigMessage(Player, _("$f00Invalid time"), 3000, 2, CUIConfig::EUISound::Silence, 0);
 				continue;
-			}
+			}*/
 			Player.Score.PrevRace = Player.CurRace;
-		
+			
 			if(!TopRuns.existskey(NbRespawns)) TopRuns[NbRespawns] = Ident[];
 			if(Player.Score != Null) {
 				if(Player.Score.Id != NullId){
@@ -112,13 +140,13 @@ foreach (Event in PendingEvents) {
 				ScoresDirty = True;
 			}
 			}
-			
+			/*
 			if (IsRaceBetter(Player.CurRace, Player.Score.BestRace)) {
 					Player.Score.BestRace = Player.CurRace;
 					Message::SendBigMessage(Player, _("New record!"), 3000, 2, CUIConfig::EUISound::Silence, 0);
 				} else {
 					Message::SendBigMessage(Player, _(""), 3000, 2, CUIConfig::EUISound::Silence, 0);
-			}
+			}*/
 			// scores ui
 			if (PrevPlayerCountForDirty != Scores.count) {
 				PrevPlayerCountForDirty = Scores.count;
@@ -208,13 +236,27 @@ foreach (Event in PendingEvents) {
 				Table ^= """</scoretable>""";
 				UIManager.UIAll.ScoreTable = Table;
 			}
+		//TM::EndRace(Event.Player);
 		}		
 	}
 	// GiveUp
-	else if (Event.Type == CTmModeEvent::EType::GiveUp) {
+	/*else if (Event.Type == CTmModeEvent::EType::GiveUp) {
 		TM::WaitRace(Event.Player);
 	}
-}
+}*/
+***
+
+***Match_EndMap***
+***
+MB_StopMatch();
+
+CutOffTimeLimit = -1;
+MB_SortScores(CTmMode::ETmScoreSortOrder::BestRace_NbRespawns);
+Scores::SetDefaultLadderSort(Scores::C_Sort_BestRaceNbRespawns);
+Scores::SetPlayerWinner(Scores::GetBestPlayer(Scores::Sort_BestRaceNbRespawns(), Scores::Order_Ascending()));
+Scores::UnspawnLosers();
+MB_Sleep(1000);
+TM::WaitRaceAll();
 ***
 
 ***Match_EndRound***
