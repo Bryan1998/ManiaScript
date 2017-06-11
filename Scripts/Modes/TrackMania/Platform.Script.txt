@@ -1,0 +1,267 @@
+  // --------|     Push The Win Button presents    |--------------//
+ // ---------|          PLATFORM MODE              |-------------//
+// -------------------------------------------------------------//
+  //---------|Visit thewinbutton.us for more stuff |--------------//
+ //----------|and to join our clan!                |-------------//
+//--------------------------------------------------------------//
+
+#Extends "Modes/TrackMania/Base/ModeTrackMania.Script.txt"
+
+#Const Version "0.1.0-dev"
+#Const ScriptName "Platform.Script.txt"
+#Const ComaptibleMaptypes "Platform"
+
+#Include "AnimLib" as AL
+#Include "MathLib" as ML
+#Include "TextLib" as TL
+
+#Setting S_TimeLimit 0 as _("Time Limit :")
+#Setting ScriptEnvironment "development"
+
+#Const Description _("""$fff In $f00Platform$fff mode you need to finish the map while accumulating the $ff0least amount of respawns while finishing the most times$fff.""")
+
+#Const C_BotsNb 0
+
+  //-------------------------------//
+ //-----------|Extends|-----------//
+//-------------------------------//
+
+***Match_LogVersion***
+***
+MB_LogVersion(ScriptName, Version);
+***
+
+***Match_InitMap***
+***
+  //-----------------------------//
+ //--------|Spawn players|------//
+//-----------------------------//
+declare Integer PrevTimeLimit = S_TimeLimit;
+declare Integer StartTime;
+
+
+foreach (Player in Players) {
+	declare	CurrentUI <=> UIManager.GetUI(Player);
+	CurrentUI.OverlayHideChrono = True;
+	CurrentUI.OverlayHideCheckPointTime = True;
+	CurrentUI.OverlayHideCheckPointList = True;
+	TM::StartRace(Player, StartTime);
+	
+}
+Layers::Create("PlatformUI", PlatformUI());
+Layers::SetType("PlatformUI", CUILayer::EUILayerType::Normal);
+Layers::Attach("PlatformUI");
+***
+
+***Match_PlayLoop***
+***
+// ---------------------------------- //
+// Update the map duration setting
+if (PrevTimeLimit != S_TimeLimit) {
+	PrevTimeLimit = S_TimeLimit;
+	SetTimeLimit(StartTime, S_TimeLimit);
+}
+
+// ---------------------------------- //
+// Spawn players
+foreach (Player in PlayersWaiting) {
+	if (TM::IsWaiting(Player)) {
+		TM::StartRace(Player);
+	}
+}
+// Manage events
+foreach (Event in PendingEvents) {
+	Events::Valid(Event);
+	if (Event.Type == CTmModeEvent::EType::WayPoint) {
+		declare FurthestCheckpointReached for Event.Player.Score = 0;
+		declare FurthestCheckpointReached_Time for Event.Player.Score = 0;
+		declare FurthestCheckpointReached_NbRespawns for Event.Player.Score = 9999;
+		if (Event.CheckpointInRace+1 > FurthestCheckpointReached
+		|| (Event.CheckpointInRace+1 == FurthestCheckpointReached && Event.NbRespawns < FurthestCheckpointReached_NbRespawns)) {
+			FurthestCheckpointReached = Event.CheckpointInRace+1;
+			FurthestCheckpointReached_Time = Now;
+			FurthestCheckpointReached_NbRespawns = Event.NbRespawns;
+		}
+	}
+	if (Event.Type == CTmModeEvent::EType::WayPoint && Event.IsEndRace) {
+					declare Player <=> Event.Player;
+					declare NbRespawns = Player.CurRace.NbRespawns;
+					declare Time = Player.CurRace.Time;
+					declare IsInvalidRace = (Event.RaceTime == 0);
+					if (Time == Event.RaceTime || IsInvalidRace && (NbRespawns == Event.NbRespawns || IsInvalidRace)) {
+						continue;
+					} else {		
+					
+					if (IsInvalidRace) {
+						Message::SendBigMessage(Player, _("$f00Invalid time"), 3000, 2, CUIConfig::EUISound::Silence, 0);
+						continue;
+					}
+					
+					Player.Score.PrevRace = Player.CurRace;
+				
+					if(!TopRuns.existskey(NbRespawns)) TopRuns[NbRespawns] = Ident[];
+					if(Player.Score != Null) {
+						if(Player.Score.Id != NullId){
+							continue;
+							}else{
+						TopRuns[NbRespawns].add(Player.Score.Id);
+					}
+					}
+					
+					if (IsRaceBetter(Player.CurRace, Player.Score.BestRace)) {
+						Player.Score.BestRace = Player.CurRace;
+						Message::SendBigMessage(Player, _("New record!"), 3000, 2, CUIConfig::EUISound::Silence, 0);
+					} else {
+						Message::SendBigMessage(Player, _(""), 3000, 2, CUIConfig::EUISound::Silence, 0);
+					}
+				}		
+		}
+}
+***
+
+***Match_EndRound***
+***
+Scores_Clear();
+Layers::Destroy("PlatformUI");
+***
+  //-----------------------------------//
+ //-------------|Functions|-----------//
+//-----------------------------------//
+
+Boolean IsRaceBetter(CTmResult _Race1, CTmResult _Race2)
+{
+	declare Comp = _Race1.Compare(_Race2, CTmResult::ETmRaceResultCriteria::NbRespawns);
+	return  Comp > 0;
+}
+
+CMode::EMedal GetMedalForScore(CTmResult _Race)
+{
+	declare metadata Integer ObjectiveAuthor 	for Map = -1;
+	declare metadata Integer ObjectiveGold 		for Map = -1;
+	declare metadata Integer ObjectiveSilver 	for Map = -1;
+	declare metadata Integer ObjectiveBronze 	for Map = -1;
+
+	if (_Race.NbRespawns <= ObjectiveAuthor && ObjectiveAuthor != ObjectiveGold) 	return CMode::EMedal::Gold;
+	else if (_Race.NbRespawns <= ObjectiveGold) 			return CMode::EMedal::Gold;
+	else if (_Race.NbRespawns <= ObjectiveSilver) 		return CMode::EMedal::Silver;
+	else if (_Race.NbRespawns <= ObjectiveBronze) 		return CMode::EMedal::Bronze;
+	else																							return CMode::EMedal::Finished;
+	return CMode::EMedal::None;
+}
+
+declare Ident[][Integer]			TopRuns; // array of ALL runs, ordered by respawns, and then by time (first to finish first)
+
+//Manialink Overlay
+Text PlatformUI() {
+	return """
+	<manialink version="3">
+		<frame pos="0 -75" z-index="0">
+			<quad pos="-20 1" z-index="-1" size="40 10" style="Bgs1InRace" substyle="BgList"/>
+			<label id="LabelRespawns" pos="0 -3" z-index="0" style="TextRaceChrono" size="30 5" halign="center" valign="center" text="0"  />
+			<label id="LabelCheckpoint" pos="0 6" z-index="0" style="TextRaceMessage" size="30 2" halign="center" text=""  />
+			<label id="LabelPrevBest" pos="0 -9" z-index="0" style="TextRaceMessage" size="30 1" scale="0.5" halign="center" text="Best: ???"  />			
+		</frame>
+		<script><!--
+			#Include "TextLib" as TL
+			#Include "AnimLib" as AL
+			#Include "MathLib" as ML
+			
+			declare Integer[CMlLabel] UIAnims_BlinkLabels;
+			declare Integer[CMlLabel] UIAnims_SplashLabels;
+			Void BlinkLabel(CMlLabel _Label, Text _Text) {
+				_Label.Value = _Text;
+				UIAnims_BlinkLabels[_Label] = Now;
+			}
+			Void SplashLabel(CMlLabel _Label, Text _Text, Text _Modifier) {
+				_Label.Value = _Modifier ^ _Text;
+				declare PureValue for _Label = _Text; PureValue = _Text;
+				UIAnims_SplashLabels[_Label] = Now;			
+			}
+			Void SplashLabelSet(CMlLabel _Label, Text _Text) {
+				_Label.Value = _Text;
+				declare PureValue for _Label = _Text; PureValue = _Text;				
+				UIAnims_SplashLabels[_Label] = -1;			
+			}
+			Void UIAnims_Update()
+			{
+				foreach(Label => Time in UIAnims_BlinkLabels) {
+					if (Now > Time && Now < Time + 1000)
+						Label.Show();
+					else
+						Label.Hide();
+				}
+				foreach(Label => Time in UIAnims_SplashLabels) {
+					if (Now >= Time && Now < Time + 500) {
+						declare t = (Now-Time)/500.0;
+						Label.Scale = 1.0 + 0.5*((t-1.0)*(t-1.0));
+					} else {
+						declare PureValue for Label = /*default*/ Label.Value;
+						Label.Value = PureValue;
+						Label.Scale = 1.0;
+					}
+				}
+				
+			}
+			main () {
+				declare LabelRespawns <=> (Page.GetFirstChild("LabelRespawns") as CMlLabel);
+				declare LabelCheckpoint <=> (Page.GetFirstChild("LabelCheckpoint") as CMlLabel);
+				declare LabelBest <=> (Page.GetFirstChild("LabelPrevBest") as CMlLabel);
+				LabelCheckpoint.Hide();
+				LabelRespawns.Value = "0";
+
+				declare persistent BestScore_NbRespawns for Map = -1;
+				
+				
+		(True) {
+					UIAnims_Update();
+					yield;
+
+					declare NbRespawnsText = "???";
+					if (GUIPlayer != Null && GUIPlayer == InputPlayer && BestScore_NbRespawns != -1)
+						NbRespawnsText = TL::ToText(BestScore_NbRespawns);
+					LabelBest.Value = TL::Compose(_("Best: %1"), NbRespawnsText);		
+					
+					//For now we just show the best of the local player.
+					//We could use a declare netread for player to have it on each player, sent by the server. (TODO.)
+					
+					if (GUIPlayer == Null) 
+						continue;
+					
+					declare CurCheckpoint for GUIPlayer = 0;
+					declare NewCheckpoint = GUIPlayer.CurRace.Checkpoints.count;
+					declare EventCheckpoint = (NewCheckpoint != CurCheckpoint && NewCheckpoint > 0 && NewCheckpoint < 100);
+					if (EventCheckpoint)
+						BlinkLabel(LabelCheckpoint, _("Checkpoint"));
+					CurCheckpoint = NewCheckpoint;
+					
+					declare CurNbRespawns for GUIPlayer = 0;
+					declare NewNbRespawns = GUIPlayer.CurRace.NbRespawns;
+					
+					if (NewNbRespawns > CurNbRespawns)
+						SplashLabel(LabelRespawns, TL::ToText(NewNbRespawns), "$C00");
+					else if (EventCheckpoint)
+						SplashLabel(LabelRespawns, TL::ToText(NewNbRespawns), "$0C0");
+					else if (CurNbRespawns != NewNbRespawns)
+						SplashLabelSet(LabelRespawns, TL::ToText(NewNbRespawns));
+					CurNbRespawns = NewNbRespawns;					
+				}
+			}
+		--></script>
+	</manialink>
+""";
+}
+
+/** Update the time limit
+ *
+ *	@param	_StartTime								The starting time of the map
+ *	@param	_NewTimeLimit							The time limit before going to the next map
+ */
+Void SetTimeLimit(Integer _StartTime, Integer _NewTimeLimit) {
+	if (_NewTimeLimit <= 0) {
+		CutOffTimeLimit = -1;
+		if (Hud != Null) Hud.ScoresTable.SetFooterText(TL::Compose("%1 -", _("Time Limit :")));
+	} else {
+		CutOffTimeLimit = _StartTime + (S_TimeLimit * 1000);
+		if (Hud != Null) Hud.ScoresTable.SetFooterText(TL::Compose("%1 "^TL::TimeToText(S_TimeLimit*1000, False), _("Time Limit :")));
+	}
+}
