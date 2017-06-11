@@ -7,7 +7,7 @@
 
 #Extends "Modes/TrackMania/Base/ModeTrackMania.Script.txt"
 
-#Const Version "0.3.0-dev"
+#Const Version "0.6.0-dev"
 #Const ScriptName "Platform.Script.txt"
 #Const ComaptibleMaptypes "Platform"
 
@@ -16,6 +16,7 @@
 #Include "TextLib" as TL
 
 #Setting	S_TimeLimit	0 		as _("Time Limit :")
+#Setting 	S_ScriptEnvironment "development"
 
 #Const Description _("""$fff In $f00Platform$fff mode you need to finish the map while accumulating the $ff0least amount of respawns while finishing the most times$fff.""")
 #Const C_BotsNb 0
@@ -32,6 +33,7 @@ MB_LogVersion(ScriptName, Version);
 ***Match_Settings***
 ***
 MB_Settings_UseDefaultHud = True;
+ChannelProgression::Enable(S_IsChannelServer);
 ***
 
 ***Match_Rules***
@@ -51,6 +53,8 @@ UI::LoadModules([
 	UIModules::C_Module_SpeedAndDistance,
 	UIModules::C_Module_Countdown
 ]);
+UI::SetTimeGapMode("BestRace_NbRespawns");
+UI::SetCheckpointTimeMode("BestRace_NbRespawns");
 ***
 
 ***Match_InitMap***
@@ -149,7 +153,6 @@ TM::WaitRaceAll();
 ***Match_EndRound***
 ***
 Scores_Clear();
-//Top10_Clear();
 Layers::Destroy("PlatformUI");
 ***
   //-----------------------------------//
@@ -212,7 +215,7 @@ Text PlatformUI() {
 				LabelCheckpoint.Hide();
 				LabelRespawns.Value = "0";
 				
-				declare persistent BestScore_NbRespawns for Map = -1;				
+				declare persistent BestScore_NbRespawns for Map = -1;
 				
 				while(True) {
 					UIAnims_Update();
