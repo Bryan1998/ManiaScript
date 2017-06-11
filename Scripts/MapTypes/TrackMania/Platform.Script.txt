@@ -1,0 +1,432 @@
+//////////////////
+//   Maps for platform: count the number of respawns and ignore time.
+//////////////////
+
+#RequireContext CTmMapType
+
+#Include "TextLib" as TextLib
+#Include "Libs/Nadeo/MapType.Script.txt"
+
+#Const SupportedTasks "Validation"
+#Setting InstantValidate False
+
+declare CUILayer UILayer;
+
+//Manialink Overlay
+Text PlatformUI() {
+	return """
+	<manialink version="3">
+		<frame pos="0 -75" z-index="0">
+			<quad pos="-20 1" z-index="-1" size="40 10" style="Bgs1InRace" substyle="BgList"/>
+			<label id="LabelRespawns" pos="0 -3" z-index="0" style="TextRaceChrono" size="30 5" halign="center" valign="center" text="0"  />
+			<label id="LabelCheckpoint" pos="0 6" z-index="0" style="TextRaceMessage" size="30 2" halign="center" text=""  />
+			<label id="LabelPrevBest" pos="0 -9" z-index="0" style="TextRaceMessage" size="30 1" scale="0.5" halign="center" text="Best: ???"  />
+		</frame>
+		<script><!--
+			#Include "TextLib" as TextLib
+			declare Integer[CMlLabel] UIAnims_BlinkLabels;
+			declare Integer[CMlLabel] UIAnims_SplashLabels;
+			Void BlinkLabel(CMlLabel _Label, Text _Text) {
+				_Label.Value = _Text;
+				UIAnims_BlinkLabels[_Label] = Now;
+			}
+			Void SplashLabel(CMlLabel _Label, Text _Text, Text _Modifier) {
+				_Label.Value = _Modifier ^ _Text;
+				declare PureValue for _Label = _Text; PureValue = _Text;
+				UIAnims_SplashLabels[_Label] = Now;			
+			}
+			Void SplashLabelSet(CMlLabel _Label, Text _Text) {
+				_Label.Value = _Text;
+				declare PureValue for _Label = _Text; PureValue = _Text;				
+				UIAnims_SplashLabels[_Label] = -1;			
+			}
+			Void UIAnims_Update()
+			{
+				foreach(Label => Time in UIAnims_BlinkLabels) {
+					if (Now > Time && Now < Time + 1000)
+						Label.Show();
+					else
+						Label.Hide();
+				}
+				foreach(Label => Time in UIAnims_SplashLabels) {
+					if (Now >= Time && Now < Time + 500) {
+						declare t = (Now-Time)/500.0;
+						Label.Scale = 1.0 + 0.5*((t-1.0)*(t-1.0));
+					} else {
+						declare PureValue for Label = /*default*/ Label.Value;
+						Label.Value = PureValue;
+						Label.Scale = 1.0;
+					}
+				}
+				
+			}
+			main () {
+				declare LabelRespawns <=> (Page.GetFirstChild("LabelRespawns") as CMlLabel);
+				declare LabelCheckpoint <=> (Page.GetFirstChild("LabelCheckpoint") as CMlLabel);
+				declare LabelBest <=> (Page.GetFirstChild("LabelPrevBest") as CMlLabel);
+				LabelCheckpoint.Hide();
+				LabelRespawns.Value = "0";
+
+				declare persistent BestScore_NbRespawns for Map = -1;
+				
+				while(True) {
+					UIAnims_Update();
+					yield;
+
+					declare NbRespawnsText = "???";
+					if (GUIPlayer != Null && GUIPlayer == InputPlayer && BestScore_NbRespawns != -1)
+						NbRespawnsText = TextLib::ToText(BestScore_NbRespawns);
+					LabelBest.Value = TextLib::Compose(_("Best: %1"), NbRespawnsText);		
+					
+					//For now we just show the best of the local player.
+					//We could use a declare netread for player to have it on each player, sent by the server. (TODO.)
+					
+					if (GUIPlayer == Null) 
+						continue;
+					
+					declare CurCheckpoint for GUIPlayer = 0;
+					declare NewCheckpoint = GUIPlayer.CurRace.Checkpoints.count;
+					declare EventCheckpoint = (NewCheckpoint != CurCheckpoint && NewCheckpoint > 0 && NewCheckpoint < 100);
+					if (EventCheckpoint)
+						BlinkLabel(LabelCheckpoint, _("Checkpoint"));
+					CurCheckpoint = NewCheckpoint;
+					
+					declare CurNbRespawns for GUIPlayer = 0;
+					declare NewNbRespawns = GUIPlayer.CurRace.NbRespawns;
+					
+					if (NewNbRespawns > CurNbRespawns)
+						SplashLabel(LabelRespawns, TextLib::ToText(NewNbRespawns), "$C00");
+					else if (EventCheckpoint)
+						SplashLabel(LabelRespawns, TextLib::ToText(NewNbRespawns), "$0C0");
+					else if (CurNbRespawns != NewNbRespawns)
+						SplashLabelSet(LabelRespawns, TextLib::ToText(NewNbRespawns));
+					CurNbRespawns = NewNbRespawns;					
+				}
+			}
+		--></script>
+	</manialink>
+""";
+}
+
+Void SetupUi(CTmMode _Rules)  // for CTmRules
+{
+	_Rules.IndependantLaps = False;
+	_Rules.UiRounds = False;
+	_Rules.UiStuntsMode = False;
+	_Rules.UiRaceChrono = CTmMode::ETmRaceChronoBehaviour::Hidden;
+	
+	UILayer = _Rules.UIManager.UILayerCreate();
+	UILayer.ManialinkPage = PlatformUI();
+	
+	_Rules.UIManager.UIAll.UILayers.add(UILayer);
+}
+
+Void CleanupUi(CTmMode _Rules)  // for CTmRules
+{
+	_Rules.UIManager.UILayerDestroy(UILayer);	
+	UILayer = Null;
+}
+
+/////////////////////////////////////
+// Validate
+
+Void SetObjectives(Integer _Author, Integer _Gold, Integer _Silver, Integer _Bronze, Integer _NbCheckpoints)
+{
+	declare metadata Integer ObjectiveAuthor 	for Map;
+	declare metadata Integer ObjectiveGold 		for Map;
+	declare metadata Integer ObjectiveSilver 	for Map;
+	declare metadata Integer ObjectiveBronze 	for Map;
+	declare metadata Integer RaceCheckpoints 	for Map;
+	
+	ObjectiveAuthor 	= _Author;
+	ObjectiveGold 		= _Gold;
+	ObjectiveSilver 	= _Silver;
+	ObjectiveBronze 	= _Bronze;
+	RaceCheckpoints		= _NbCheckpoints;
+
+	Map.ObjectiveTextAuthor = " ";
+	Map.ObjectiveTextGold 	= """{{{ObjectiveGold}}} respawns""";
+	Map.ObjectiveTextSilver = """{{{ObjectiveSilver}}} respawns""";
+	Map.ObjectiveTextBronze = """{{{ObjectiveBronze}}} respawns""";
+}
+
+Void SetDefaultObjectives(Integer _AuthorRespawns, Integer _NbCheckpoints)
+{
+	/*
+	ObjectiveAuthor 	= _AuthorRespawns;
+	ObjectiveGold 		= 0 + _AuthorRespawns + _AuthorRespawns/10;
+	ObjectiveSilver 	= 1 + _AuthorRespawns + _AuthorRespawns/5;
+	ObjectiveBronze 	= 3 + _AuthorRespawns + _AuthorRespawns/2;
+	*/
+
+	SetObjectives(0, 0, 3, 10, _NbCheckpoints);
+}
+	
+declare CBlock 		BlockStart;
+declare CBlock[] 	BlockFinishs;
+declare Integer[CBlock]	BlockCheckpoints;	// ordered
+
+Void UpdateValidability()
+{
+	BlockStart <=> Null;
+	BlockFinishs = CBlock[];
+	BlockCheckpoints = Integer[CBlock];
+
+	// analyse the blocks of the map
+	declare StartFound = 0;
+	declare IsMultiLap = False;
+	foreach(Block in Blocks) {
+		declare Type = Block.BlockModel.WaypointType;
+		if (Type == CBlockModel::EWayPointType::Start)			{ BlockStart <=> Block; StartFound += 1; }
+		if (Type == CBlockModel::EWayPointType::StartFinish)	{ BlockStart <=> Block; BlockFinishs.add(Block); StartFound += 1; IsMultiLap = True; }
+		if (Type == CBlockModel::EWayPointType::Finish)	 		{ BlockFinishs.add(Block); }
+		if (Type == CBlockModel::EWayPointType::Checkpoint)		{ BlockCheckpoints[Block] = 0; }
+	}
+
+	// Is there a start and finish
+	if(StartFound != 1) {
+		ValidationStatus = CMapType::ValidationStatus::NotValidable;
+		ValidabilityRequirementsMessage = _("This map requires exactly one start.");
+		return;
+	}
+	
+	if (IsMultiLap && BlockCheckpoints.count == 0) {
+		ValidationStatus = CMapType::ValidationStatus::NotValidable;
+		ValidabilityRequirementsMessage = _("This multilap map requires at least one checkpoint.");
+		return;
+	}
+	
+	if (BlockFinishs.count == 0) {
+		ValidationStatus = CMapType::ValidationStatus::NotValidable;
+		ValidabilityRequirementsMessage = _("This map requires at least one finish.");
+		return;
+	}
+	
+	// all the conditions are met to start the validation (or it is already validated)
+	if (ValidationStatus == CMapType::ValidationStatus::NotValidable)
+		ValidationStatus = CMapType::ValidationStatus::Validable;	
+}
+
+
+Void DoValidate() {	
+	assert(ValidationStatus == ::ValidationStatus::Validable  || ValidationStatus == ::ValidationStatus::Validated);
+
+	declare persistent BestScore_NbRespawns for Map = -1;
+	if (ValidationStatus == ::ValidationStatus::Validable) {
+		ClearMapMetadata();
+		BestScore_NbRespawns = -1;
+		
+	} else {
+		// Keep previous validation, only improve.
+		declare metadata Integer ObjectiveAuthor for Map /*default*/= 999;
+		BestScore_NbRespawns = ObjectiveAuthor;		// start from previous record.
+	}
+
+	// HACK instant validate
+	if (InstantValidate == True) {
+			ValidationStatus = CMapType::ValidationStatus::Validated;	
+			SetDefaultObjectives(0, BlockCheckpoints.count);
+			return;
+	}	else {
+	}
+	// HACK instant validate
+	
+	// Validation
+	EnterPlayground(1);	// add 1 player to the playground
+	declare Player <=> Mode.AllPlayers[0];
+	Player.RaceStartTime = 0;
+	
+	// ui settings
+	Mode.CutOffTimeLimit = 0;
+	SetupUi(Mode);
+
+	declare LatestFinish = 0;
+	declare NbCheckpointsPassed = 0;
+	while (!ValidationEndRequested) {	
+		yield;
+
+		if (LatestFinish != 0 && LatestFinish + 3000 < Now) {
+			Player.RaceStartTime = 0;	// unspawn
+			LatestFinish = 0;
+		}
+			
+		if (Player.RaceStartTime == 0) {
+			// Spawn the player on the start line.
+//			Player.RaceStartBlockId = BlockStart.Id;
+			Mode.UIManager.UIAll.BigMessage = "";
+			Player.RaceStartTime = Mode.Now + 3000;
+			Mode.UIManager.UIAll.UISequence = CUIConfig::EUISequence::Playing;
+		}
+		
+		foreach(Event in Mode.PendingEvents) {
+			// check the checkpoints
+			if (Event.Type == CTmModeEvent::EType::WayPoint) {	
+				declare Block <=> Blocks[Event.BlockId];
+
+				// Tick off checkpoints
+				if (BlockCheckpoints.existskey(Block)) {
+					if (BlockCheckpoints[Block] == 0) {
+						NbCheckpointsPassed += 1; 
+						BlockCheckpoints[Block] = NbCheckpointsPassed; 
+					} else {
+						// check point already validated.
+					}
+				}
+
+				// If player went through all checkpoints and then finish ==>  race valid
+				if (BlockFinishs.exists(Block) && NbCheckpointsPassed == BlockCheckpoints.count) {
+					ValidationStatus = CMapType::ValidationStatus::Validated;	
+
+					if (BestScore_NbRespawns == -1 || Event.NbRespawns < BestScore_NbRespawns) {
+						if (Event.NbRespawns != 1)
+							Mode.UIManager.UIAll.BigMessage = TextLib::Compose(_("New record: %1 respawns."), TextLib::ToText(Event.NbRespawns));
+						else 
+							Mode.UIManager.UIAll.BigMessage = _("New record: 1 respawn.");
+						BestScore_NbRespawns = Event.NbRespawns;
+						SetDefaultObjectives(BestScore_NbRespawns, BlockCheckpoints.count);
+						// SaveBestRaceGhost();					 --> not that usefull in platform, this is not a race.
+					}
+
+					Mode.UIManager.UIAll.UISequence = CUIConfig::EUISequence::Outro;
+					LatestFinish = Now;
+				}
+			}
+
+			// do the default processing for all events.
+			Mode.PassOn(Event);	
+		}
+	}	
+
+	CleanupUi(Mode);
+
+	LeavePlayground();
+}
+
+/////////////////////////////////////
+// EditObjectives
+
+Void EditObjectives() 
+{
+	// dialog box to edit objectives:
+	//   Objectives:
+ 	//		Author:  0  respawns
+	//		Gold:	 1  respawns  
+	//		Bronze:	 2  respawns  
+	//		Silver:	 3  respawns
+	//   Auto | Ok | Cancel
+  
+	declare metadata Integer ObjectiveAuthor 	for Map;
+	declare metadata Integer ObjectiveGold 		for Map;
+	declare metadata Integer ObjectiveSilver 	for Map;
+	declare metadata Integer ObjectiveBronze 	for Map;
+	declare metadata Integer RaceCheckpoints 	for Map;
+	
+	while(True) 
+	{
+		ManialinkText = 
+		"""
+		<manialink version="3">
+		<frame pos="-60 40" z-index="0">
+			<quad id="ReadWriteBox" pos="0 0" z-index="-1" size="120 60" style="Bgs1" substyle="BgList" ScriptEvents="1"/>
+				<label id="Title" text="Map objectives" pos="60 -10" z-index="0" style="TextTitle3" halign="center"/>
+				<label id="AuthorLabel" text="Author" pos="20 -16" z-index="0"/>
+					<label id="AuthorValue" text="{{{ObjectiveAuthor}}}" pos="62 -16" z-index="0" size="10 4"/>
+						<label text="respawns" pos="74 -16" z-index="0"/>
+				<label id="GoldLabel" text="Gold" pos="20 -21" z-index="0"/>
+					<entry id="GoldValue" default="{{{ObjectiveGold}}}" pos="62 -21" z-index="0" size="10 4"/>
+						<label text="respawns" pos="74 -21" z-index="0"/>
+				<label id="SilverLabel" text="Silver" pos="20 -26" z-index="0"/>
+					<entry id="SilverValue" default="{{{ObjectiveSilver}}}" pos="62 -26" z-index="0" size="10 4"/>
+						<label text="respawns" pos="74 -26" z-index="0"/>
+				<label id="BronzeLabel" text="Bronze" pos="20 -31" z-index="0"/>
+					<entry id="BronzeValue" default="{{{ObjectiveBronze}}}" pos="62 -31" z-index="0" size="10 4"/>
+						<label text="respawns" pos="74 -31" z-index="0"/>
+
+				<quad id="ButtonAuto" pos="60 -45" z-index="0" size="30 6" halign="center" valign="center" style="Bgs1InRace" substyle="BgCard" ScriptEvents="1"/>
+				<label text="Auto" pos="60 -45" z-index="1" halign="center" valign="center" style="TextButtonSmall" textsize="2"/>
+				
+				<quad id="ButtonOk" pos="40 -52" z-index="0" size="30 6" halign="center" valign="center" style="Bgs1InRace" substyle="BgCard" ScriptEvents="1"/>
+				<label text="Ok" pos="40 -52" z-index="1" halign="center" valign="center" style="TextButtonSmall" textsize="2"/>
+				
+				<quad id="ButtonCancel" pos="80 -52" z-index="0" size="30 6" halign="center" valign="center" style="Bgs1InRace" substyle="BgCard" ScriptEvents="1"/>
+				<label text="Cancel" pos="80 -52" z-index="1" halign="center" valign="center" style="TextButtonSmall" textsize="2"/>
+		</frame>
+		<script><!--
+			main () {
+				declare ButtonClicked for Page = "";
+				while(True) {
+					yield;
+					foreach(Event in PendingEvents) {
+						if(Event.Type == CGameManialinkScriptEvent::Type::MouseClick)	{	
+							if (ButtonClicked == "") ButtonClicked = Event.ControlId;
+						}
+					}
+				}
+			}
+		--></script>
+		</manialink>
+		""";
+
+		declare ButtonClicked for ManialinkPage = "" ;
+		ButtonClicked = "";
+		wait(ButtonClicked == "ButtonOk" 
+				|| ButtonClicked == "ButtonCancel" 
+				|| ButtonClicked == "ButtonAuto");
+		
+		if (ButtonClicked == "ButtonCancel") {
+			break;
+		}
+
+		if (ButtonClicked == "ButtonOk") {
+			declare Page <=> ManialinkPage;
+			declare EntryGoldValue <=> (Page.GetFirstChild("GoldValue") as CMlEntry);
+			declare EntrySilverValue <=> (Page.GetFirstChild("SilverValue") as CMlEntry);
+			declare EntryBronzeValue <=> (Page.GetFirstChild("BronzeValue") as CMlEntry);
+
+			declare NewGold = TextLib::ToInteger(EntryGoldValue.Value);
+			declare NewSilver = TextLib::ToInteger(EntrySilverValue.Value);
+			declare NewBronze = TextLib::ToInteger(EntryBronzeValue.Value);
+			
+			if (NewBronze >= NewSilver &&   NewSilver >= NewGold && NewGold >= ObjectiveAuthor) {
+				ObjectiveGold   = NewGold;
+				ObjectiveSilver = NewSilver;
+				ObjectiveBronze = NewBronze;
+				SetObjectives(ObjectiveAuthor, NewGold, NewSilver, NewBronze, RaceCheckpoints);
+				break;
+			} else {
+				log("invalid values.");		// TODO: add dialog box
+			}
+		}
+
+		if (ButtonClicked == "ButtonAuto") {
+			// TODO: Do not replace the direct values, but just prefill the entries, and wait for the "Ok" to commit values.
+			SetDefaultObjectives(ObjectiveAuthor, RaceCheckpoints);
+		}
+	}
+
+	ManialinkText = "";
+}
+
+
+/////////////////////////////////////
+// Main
+
+main() {	
+	UpdateValidability();
+	// meanwhile
+	while (True) {	
+		yield;
+		ManialinkText = "";			
+		foreach(Event in PendingEvents) {
+			if(Event.Type == CPluginEvent::Type::MapModified) {
+				UpdateValidability();			
+			} else if(Event.Type == CPluginEvent::Type::StartValidation) {
+				DoValidate();
+			} else if(Event.Type == CPluginEvent::Type::EditObjectives) {
+				EditObjectives();
+			//} else if (CurrentMode == CMapType::Modes::AnchorEdition) {
+			//	EditAnchorData();			
+			}
+		}		
+	}	
+}
