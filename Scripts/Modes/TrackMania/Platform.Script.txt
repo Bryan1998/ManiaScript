@@ -66,10 +66,6 @@ declare MatchStartTime = Now + 2000;
 declare metadata Integer RaceCheckpoints 	for Map;
 
 foreach (Player in Players) {
-	declare	CurrentUI <=> UIManager.GetUI(Player);
-	CurrentUI.OverlayHideChrono = True;
-	CurrentUI.OverlayHideCheckPointTime = True;
-	CurrentUI.OverlayHideCheckPointList = True;
 	TM::StartRace(Player, StartTime);
 	
 }
@@ -94,6 +90,10 @@ if (PrevTimeLimit != S_TimeLimit) {
 // Spawn players
 foreach (Player in PlayersWaiting) {
 	if (TM::IsWaiting(Player)) {
+		declare	CurrentUI <=> UIManager.GetUI(Player);
+		CurrentUI.OverlayHideChrono = True;
+		CurrentUI.OverlayHideCheckPointTime = True;
+		CurrentUI.OverlayHideCheckPointList = True;
 		TM::StartRace(Player);
 	}
 }
