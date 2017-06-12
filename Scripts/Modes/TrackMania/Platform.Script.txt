@@ -7,12 +7,10 @@
 
 #Extends "Modes/TrackMania/Base/ModeTrackMania.Script.txt"
 
-#Const Version "0.6.0-dev"
+#Const Version "0.7.0-dev"
 #Const ScriptName "Platform.Script.txt"
 #Const ComaptibleMaptypes "Platform"
 
-#Include "AnimLib" as AL
-#Include "MathLib" as ML
 #Include "TextLib" as TL
 
 #Setting	S_TimeLimit	0 		as _("Time Limit :")
@@ -32,7 +30,7 @@ MB_LogVersion(ScriptName, Version);
 
 ***Match_Settings***
 ***
-MB_Settings_UseDefaultHud = True;
+MB_Settings_UseDefaultHud = False;
 ChannelProgression::Enable(S_IsChannelServer);
 ***
 
@@ -133,6 +131,85 @@ foreach (Event in PendingEvents) {
 				TopRuns[NbRespawns].add(Player.Score.Id);
 			}
 		}
+		declare Integer[Ident] NbRunsPerScore;
+				declare MaxNbRuns = 0;
+				foreach(NbRespawns => Runs in TopRuns) {
+					foreach(ScoreId in Runs) {						
+						if (!NbRunsPerScore.existskey(ScoreId)) NbRunsPerScore[ScoreId] = 0;
+						NbRunsPerScore[ScoreId] += 1;
+						if (NbRunsPerScore[ScoreId] > MaxNbRuns) MaxNbRuns = NbRunsPerScore[ScoreId];	
+					}
+				}
+
+				declare Text[Ident] SortStringPerScore;	
+				declare Text[Ident] DisplayStringPerScore;				
+				foreach(NbRespawns => Runs in TopRuns) {
+					foreach(ScoreId in Runs) {			
+						if(!SortStringPerScore.existskey(ScoreId)) {
+							SortStringPerScore[ScoreId] = "";
+							DisplayStringPerScore[ScoreId] = "";
+						}
+						SortStringPerScore[ScoreId] ^= " " ^ TL::FormatInteger(NbRespawns, 3);
+						
+						declare Len = TL::Length(DisplayStringPerScore[ScoreId]);
+						if (Len < 10) {
+							if(Len != 0) DisplayStringPerScore[ScoreId] ^= "-";
+							DisplayStringPerScore[ScoreId] ^= NbRespawns;
+						}
+					}
+				}
+				
+
+				// We add fake very bad runs 
+				foreach(ScoreId => String in SortStringPerScore) {
+					for(I, NbRunsPerScore[ScoreId]+1, MaxNbRuns) {
+						SortStringPerScore[ScoreId] ^= " XXX";
+					}
+				}
+				
+				//  add the players that haven't reached the finish yet.
+				foreach(Score in Scores) {
+					declare FurthestCheckpointReached for Score = 0;
+					declare FurthestCheckpointReached_Time for Score = 0;
+					declare FurthestCheckpointReached_NbRespawns for Score = 9999;
+					
+					if (FurthestCheckpointReached == 0)
+						continue;
+					if (SortStringPerScore.existskey(Score.Id))
+						continue;
+						
+					SortStringPerScore[Score.Id] = " XXX c" ^ TL::FormatInteger(999-FurthestCheckpointReached, 3) ^ " " ^ TL::FormatInteger(FurthestCheckpointReached_NbRespawns, 3) ^ " " ^ TL::FormatInteger(FurthestCheckpointReached_Time-MatchStartTime,10);
+					DisplayStringPerScore[Score.Id] = "$E76(-"^ (RaceCheckpoints+1)-FurthestCheckpointReached ^")$z " ^ FurthestCheckpointReached_NbRespawns;
+				}
+
+				SortStringPerScore = SortStringPerScore.sort();
+				
+				foreach( Score in Scores ) {
+					declare FurthestCheckpointReached for Score = 0;
+					if (FurthestCheckpointReached != 0)
+						Score.LadderRankSortValue = SortStringPerScore.count+1;
+					else
+						Score.LadderRankSortValue = 0;	// not in ladder.
+				}
+				declare I = 1;
+				foreach( ScoreId => String in SortStringPerScore ) {
+					Scores[ScoreId].LadderRankSortValue = I;
+					I += 1;
+				}
+				
+				Scores_Sort(::ETmScoreSortOrder::LadderRankSortValue);
+				
+				declare Table = """<scoretable type="text">""";
+				foreach (Score in Scores) {
+					declare Val = "?";
+					if (DisplayStringPerScore.existskey(Score.Id))
+					Val = DisplayStringPerScore[Score.Id];
+					
+					Table ^= """<score login="{{{Score.User.Login}}}" value="{{{Val}}}" inc="0"/>""";		
+				}
+				Table ^= """</scoretable>""";
+				UIManager.UIAll.ScoreTable = Table;
+		
 	}		
 }
 ***
@@ -171,7 +248,7 @@ Text PlatformUI() {
 			<label id="LabelPrevBest" pos="0 -9" z-index="0" style="TextRaceMessage" size="30 1" scale="0.5" halign="center" text="Best: ???"  />			
 		</frame>
 		<script><!--
-			#Include "TextLib" as TextLib
+			#Include "TextLib" as TL
 			declare Integer[CMlLabel] UIAnims_BlinkLabels;
 			declare Integer[CMlLabel] UIAnims_SplashLabels;
 			Void BlinkLabel(CMlLabel _Label, Text _Text) {
@@ -223,8 +300,8 @@ Text PlatformUI() {
 
 					declare NbRespawnsText = "???";
 					if (GUIPlayer != Null && GUIPlayer == InputPlayer && BestScore_NbRespawns != -1)
-						NbRespawnsText = TextLib::ToText(BestScore_NbRespawns);
-					LabelBest.Value = TextLib::Compose(_("Best: %1"), NbRespawnsText);		
+						NbRespawnsText = Tl::ToText(BestScore_NbRespawns);
+					LabelBest.Value = TL::Compose(_("Best: %1"), NbRespawnsText);		
 					
 					//For now we just show the best of the local player.
 					//We could use a declare netread for player to have it on each player, sent by the server. (TODO.)
@@ -243,11 +320,11 @@ Text PlatformUI() {
 					declare NewNbRespawns = GUIPlayer.CurRace.NbRespawns;
 					
 					if (NewNbRespawns > CurNbRespawns)
-						SplashLabel(LabelRespawns, TextLib::ToText(NewNbRespawns), "$C00");
+						SplashLabel(LabelRespawns, TL::ToText(NewNbRespawns), "$C00");
 					else if (EventCheckpoint)
-						SplashLabel(LabelRespawns, TextLib::ToText(NewNbRespawns), "$0C0");
+						SplashLabel(LabelRespawns, TL::ToText(NewNbRespawns), "$0C0");
 					else if (CurNbRespawns != NewNbRespawns)
-						SplashLabelSet(LabelRespawns, TextLib::ToText(NewNbRespawns));
+						SplashLabelSet(LabelRespawns, TL::ToText(NewNbRespawns));
 					CurNbRespawns = NewNbRespawns;					
 				}
 			}
