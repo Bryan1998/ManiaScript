@@ -7,11 +7,12 @@
 
 #Extends "Modes/TrackMania/Base/ModeTrackMania.Script.txt"
 
-#Const Version "0.1.1-alpha"
+#Const Version "0.2.2-alpha"
 #Const ScriptName "Platform.Script.txt"
 #Const ComaptibleMaptypes "Platform"
 
 #Include "TextLib" as TL
+#Include "MathLib" as ML
 #Include "Libs/Nadeo/ScoresTable2.Script.txt" as ST2
 
 #Setting	S_TimeLimit	0 		as _("Time Limit :")
@@ -58,9 +59,9 @@ UI::SetCheckpointTimeMode("BestRace_NbRespawns");
  //-----|Create scores table|--------//
 //----------------------------------//
 ST2::Load();
-ST2::SetStyle("LibST_TMBaseSolo");
+ST2::SetStyle("LibST_Base");
 
-ST2::CreateCol("RespawnScore", "Score", "XXX", 8., 60.);
+ST2::CreateCol("RespawnScore", "Score", "???", 8., 60.);
 
 ST2::SetColTextAlign("RespawnScore", CMlControl::AlignHorizontal::Right);
 
@@ -70,8 +71,7 @@ ST2::SetFooterText(TL::Compose("%1 "^TL::TimeToText(S_TimeLimit*1000, False), _(
 ST2::Build("TM");
 
 RespawnBehaviour::Set(CTmMode::ETMRespawnBehaviour::GiveUpBeforeFirstCheckPoint);
-	
-declare Ident[][Integer] TopRuns; // array of ALL runs, ordered by respawns, and then by time (first to finish first)
+
 declare Integer PrevTimeLimit = S_TimeLimit;
 declare Integer StartTime;
 declare MatchStartTime = Now + 2000;
@@ -133,35 +133,31 @@ foreach (Event in PendingEvents) {
 		declare Time = Player.CurRace.Time;
 		TM::EndRace(Event.Player);
 		Player.Score.PrevRace = Player.CurRace;
-		//Scores Table
-		}
-		declare Integer[Ident] NbRunsPerScore;
-		declare MaxNbRuns = 0;
-		foreach(NbRespawns => Runs in TopRuns) {
-			foreach(ScoreId in Runs) {						
-				if (!NbRunsPerScore.existskey(ScoreId)) NbRunsPerScore[ScoreId] = 0;
-				NbRunsPerScore[ScoreId] += 1;
-				if (NbRunsPerScore[ScoreId] > MaxNbRuns) MaxNbRuns = NbRunsPerScore[ScoreId];	
-			}
-		}
+		
+		
+		declare Integer[] Respawns for Player; //use this everywhere where you need to know # of respawns for a player
+		declare Integer NewNbRespawns;
+		//to add # of respawns to the list
+		Respawns.add(NewNbRespawns);
+		// to clear the list
+		Respawns.clear();
 
-		declare Text[Ident] SortStringPerScore;	
-		declare Text[Ident] DisplayStringPerScore;				
-		foreach(NbRespawns => Runs in TopRuns) {
-			foreach(ScoreId in Runs) {			
-				if(!SortStringPerScore.existskey(ScoreId)) {
-					SortStringPerScore[ScoreId] = "";
-					DisplayStringPerScore[ScoreId] = "";
-				}
-				SortStringPerScore[ScoreId] ^= " " ^ TextLib::FormatInteger(NbRespawns, 3);
-				
-				declare Len = TextLib::Length(DisplayStringPerScore[ScoreId]);
-				if (Len < 10) {
-					if(Len != 0) DisplayStringPerScore[ScoreId] ^= "-";
-					DisplayStringPerScore[ScoreId] ^= NbRespawns;
-				}
-			}
+		//to calc scores.. make up your own algorithm..
+		//but here's some idea:
+		//respawn score:
+		declare Integer RespawnScore for Player.Score;
+		RespawnScore = 0;
+		foreach (NbRespawns in Respawns) {
+		
 		}
+		//number of runs: (just a plain number of runs)
+		declare Integer NbRuns for Player.Score;
+		//total score:
+		ST2::SetColValue("RespawnScore",	Event.Player.Score, TL::ToText(NbRespawns));
+		/*to encourage players to make more runs, divide RespawnScore by Respawns.count
+		and to make difference between 0-0-0 and 0-0-0-0 you can also substract Respawns.count from RespawnScore.
+		then make base value of RespawnScore to some big value, such as 100
+		and beware of division by zero*/
 	}
 }
 ***
