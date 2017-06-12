@@ -7,11 +7,12 @@
 
 #Extends "Modes/TrackMania/Base/ModeTrackMania.Script.txt"
 
-#Const Version "0.1.1-alpha"
+#Const Version "0.1.2-alpha"
 #Const ScriptName "Platform.Script.txt"
 #Const ComaptibleMaptypes "Platform"
 
 #Include "TextLib" as TL
+#Include "Libs/Nadeo/ScoresTable2.Script.txt" as ST2
 
 #Setting	S_TimeLimit	0 		as _("Time Limit :")
 #Setting 	S_ScriptEnvironment "development"
@@ -44,25 +45,38 @@ ModeInfo::SetStatusMessage(_("TYPE: Free for all\nOBJECTIVE: Set the least amoun
 
 ***Match_LoadHud***
 ***
-MB_SortScores(CTmMode::ETmScoreSortOrder::BestRace_NbRespawns);
-
 // Initialize UI modules
-UI::LoadModules([
-	UIModules::C_Module_SpeedAndDistance,
-	UIModules::C_Module_Countdown
-]);
+UI::LoadModules([UIModules::C_Module_SpeedAndDistance, UIModules::C_Module_Countdown]);
 UI::SetTimeGapMode("BestRace_NbRespawns");
 UI::SetCheckpointTimeMode("BestRace_NbRespawns");
 ***
 
 ***Match_InitMap***
 ***
+
+  //----------------------------------//
+ //-----|Create scores table|--------//
+//----------------------------------//
+ST2::Load();
+ST2::SetStyle("LibST_TMBaseSolo");
+
+ST2::CreateCol("RespawnScore", "Score", "XXX", 8., 60.);
+
+ST2::SetColTextAlign("RespawnScore", CMlControl::AlignHorizontal::Right);
+
+ST2::SetModeIcon("Icons128x32_1|RT_TimeAttack");
+ST2::SetFooterText(TL::Compose("%1 "^TL::TimeToText(S_TimeLimit*1000, False), _("Time Limit :")));
+
+ST2::Build("TM");
+
 RespawnBehaviour::Set(CTmMode::ETMRespawnBehaviour::GiveUpBeforeFirstCheckPoint);
+				
+//declare Ident[][Integer] TopRuns; // array of ALL runs, ordered by respawns, and then by time (first to finish first)
 
 declare Integer PrevTimeLimit = S_TimeLimit;
 declare Integer StartTime;
 declare MatchStartTime = Now + 2000;
-declare metadata Integer RaceCheckpoints 	for Map;
+declare metadata Integer RaceCheckpoints for Map;
 
 foreach (Player in Players) {
 	declare	CurrentUI <=> UIManager.GetUI(Player);
@@ -103,6 +117,8 @@ foreach (Player in PlayersWaiting) {
 // Manage events
 foreach (Event in PendingEvents) {
 	Events::Valid(Event);
+	
+	
 	if (Event.Type == CTmModeEvent::EType::WayPoint) {
 		declare FurthestCheckpointReached for Event.Player.Score = 0;
 		declare FurthestCheckpointReached_Time for Event.Player.Score = 0;
@@ -115,102 +131,12 @@ foreach (Event in PendingEvents) {
 		}
 	}
 	if (Event.IsEndRace) {
-			declare Player <=> Event.Player;
-			declare NbRespawns = Player.CurRace.NbRespawns;
-			declare Time = Player.CurRace.Time;
-		
-			TM::EndRace(Event.Player);
-
-			Player.Score.PrevRace = Player.CurRace;
-			
-			if(!TopRuns.existskey(NbRespawns)) TopRuns[NbRespawns] = Ident[];
-			if(Player.Score != Null) {
-				if(Player.Score.Id != NullId){
-					continue;
-					} else {
-				TopRuns[NbRespawns].add(Player.Score.Id);
-			}
-		}
-		declare Integer[Ident] NbRunsPerScore;
-				declare MaxNbRuns = 0;
-				foreach(NbRespawns => Runs in TopRuns) {
-					foreach(ScoreId in Runs) {						
-						if (!NbRunsPerScore.existskey(ScoreId)) NbRunsPerScore[ScoreId] = 0;
-						NbRunsPerScore[ScoreId] += 1;
-						if (NbRunsPerScore[ScoreId] > MaxNbRuns) MaxNbRuns = NbRunsPerScore[ScoreId];	
-					}
-				}
-
-				declare Text[Ident] SortStringPerScore;	
-				declare Text[Ident] DisplayStringPerScore;				
-				foreach(NbRespawns => Runs in TopRuns) {
-					foreach(ScoreId in Runs) {			
-						if(!SortStringPerScore.existskey(ScoreId)) {
-							SortStringPerScore[ScoreId] = "";
-							DisplayStringPerScore[ScoreId] = "";
-						}
-						SortStringPerScore[ScoreId] ^= " " ^ TL::FormatInteger(NbRespawns, 3);
-						
-						declare Len = TL::Length(DisplayStringPerScore[ScoreId]);
-						if (Len < 10) {
-							if(Len != 0) DisplayStringPerScore[ScoreId] ^= "-";
-							DisplayStringPerScore[ScoreId] ^= NbRespawns;
-						}
-					}
-				}
-				
-
-				// We add fake very bad runs 
-				foreach(ScoreId => String in SortStringPerScore) {
-					for(I, NbRunsPerScore[ScoreId]+1, MaxNbRuns) {
-						SortStringPerScore[ScoreId] ^= " XXX";
-					}
-				}
-				
-				//  add the players that haven't reached the finish yet.
-				foreach(Score in Scores) {
-					declare FurthestCheckpointReached for Score = 0;
-					declare FurthestCheckpointReached_Time for Score = 0;
-					declare FurthestCheckpointReached_NbRespawns for Score = 9999;
-					
-					if (FurthestCheckpointReached == 0)
-						continue;
-					if (SortStringPerScore.existskey(Score.Id))
-						continue;
-						
-					SortStringPerScore[Score.Id] = " XXX c" ^ TL::FormatInteger(999-FurthestCheckpointReached, 3) ^ " " ^ TL::FormatInteger(FurthestCheckpointReached_NbRespawns, 3) ^ " " ^ TL::FormatInteger(FurthestCheckpointReached_Time-MatchStartTime,10);
-					DisplayStringPerScore[Score.Id] = "$E76(-"^ (RaceCheckpoints+1)-FurthestCheckpointReached ^")$z " ^ FurthestCheckpointReached_NbRespawns;
-				}
-
-				SortStringPerScore = SortStringPerScore.sort();
-				
-				foreach( Score in Scores ) {
-					declare FurthestCheckpointReached for Score = 0;
-					if (FurthestCheckpointReached != 0)
-						Score.LadderRankSortValue = SortStringPerScore.count+1;
-					else
-						Score.LadderRankSortValue = 0;	// not in ladder.
-				}
-				declare I = 1;
-				foreach( ScoreId => String in SortStringPerScore ) {
-					Scores[ScoreId].LadderRankSortValue = I;
-					I += 1;
-				}
-				
-				Scores_Sort(::ETmScoreSortOrder::LadderRankSortValue);
-				
-				declare Table = """<scoretable type="text">""";
-				foreach (Score in Scores) {
-					declare Val = "?";
-					if (DisplayStringPerScore.existskey(Score.Id))
-					Val = DisplayStringPerScore[Score.Id];
-					
-					Table ^= """<score login="{{{Score.User.Login}}}" value="{{{Val}}}" inc="0"/>""";		
-				}
-				Table ^= """</scoretable>""";
-				UIManager.UIAll.ScoreTable = Table;
-		
-	}		
+		declare Player <=> Event.Player;
+		declare NbRespawns = Player.CurRace.NbRespawns;
+		declare Time = Player.CurRace.Time;
+		TM::EndRace(Event.Player);
+		Player.Score.PrevRace = Player.CurRace;
+	}
 }
 ***
 
@@ -219,16 +145,13 @@ foreach (Event in PendingEvents) {
 MB_StopMatch();
 
 CutOffTimeLimit = -1;
-MB_SortScores(CTmMode::ETmScoreSortOrder::BestRace_NbRespawns);
-Scores::SetDefaultLadderSort(Scores::C_Sort_BestRaceNbRespawns);
-Scores::SetPlayerWinner(Scores::GetBestPlayer(Scores::Sort_BestRaceNbRespawns(), Scores::Order_Ascending()));
-Scores::UnspawnLosers();
 MB_Sleep(1000);
 TM::WaitRaceAll();
 ***
 
 ***Match_EndRound***
 ***
+ST2::Unload();
 Scores_Clear();
 Layers::Destroy("PlatformUI");
 ***
@@ -236,7 +159,7 @@ Layers::Destroy("PlatformUI");
  //-------------|Functions|-----------//
 //-----------------------------------//
 
-declare Ident[][Integer]			TopRuns; // array of ALL runs, ordered by respawns, and then by time (first to finish first)
+
 //Manialink Overlay
 Text PlatformUI() {
 	return """
@@ -300,7 +223,7 @@ Text PlatformUI() {
 
 					declare NbRespawnsText = "???";
 					if (GUIPlayer != Null && GUIPlayer == InputPlayer && BestScore_NbRespawns != -1)
-						NbRespawnsText = Tl::ToText(BestScore_NbRespawns);
+						NbRespawnsText = TL::ToText(BestScore_NbRespawns);
 					LabelBest.Value = TL::Compose(_("Best: %1"), NbRespawnsText);		
 					
 					//For now we just show the best of the local player.
@@ -332,39 +255,12 @@ Text PlatformUI() {
 	</manialink>
 """;
 }
-
-Boolean IsRaceBetter(CTmResult _Race1, CTmResult _Race2)
-{
-	declare Comp = _Race1.Compare(_Race2, CTmResult::ETmRaceResultCriteria::NbRespawns);
-	return Comp > 0;
-}
-
-CMode::EMedal GetMedalForScore(CTmResult _Race)
-{
-	declare metadata Integer ObjectiveAuthor 	for Map = -1;
-	declare metadata Integer ObjectiveGold 		for Map = -1;
-	declare metadata Integer ObjectiveSilver 	for Map = -1;
-	declare metadata Integer ObjectiveBronze 	for Map = -1;
-
-	if (_Race.NbRespawns <= ObjectiveAuthor && ObjectiveAuthor != ObjectiveGold) 	return CMode::EMedal::Gold;		// CMode::EMedal::Author;  --> no, gold at most.
-	else if (_Race.NbRespawns <= ObjectiveGold) 		return CMode::EMedal::Gold;
-	else if (_Race.NbRespawns <= ObjectiveSilver) 		return CMode::EMedal::Silver;
-	else if (_Race.NbRespawns <= ObjectiveBronze) 		return CMode::EMedal::Bronze;
-	else												return CMode::EMedal::Finished;
-	return CMode::EMedal::None;
-}
-
-/** Update the time limit
- *
- *	@param	_StartTime								The starting time of the map
- *	@param	_NewTimeLimit							The time limit before going to the next map
- */
 Void SetTimeLimit(Integer _StartTime, Integer _NewTimeLimit) {
 	if (_NewTimeLimit <= 0) {
 		CutOffTimeLimit = -1;
-		if (Hud != Null) Hud.ScoresTable.SetFooterText(TL::Compose("%1 -", _("Time Limit :")));
+		ST2::SetFooterText(TL::Compose("%1 -", _("Time Limit :")));
 	} else {
 		CutOffTimeLimit = _StartTime + (S_TimeLimit * 1000);
-		if (Hud != Null) Hud.ScoresTable.SetFooterText(TL::Compose("%1 "^TL::TimeToText(S_TimeLimit*1000, False), _("Time Limit :")));
+		ST2::SetFooterText(TL::Compose("%1 "^TL::TimeToText(S_TimeLimit * 1000, False), _("Time Limit :")));
 	}
 }
