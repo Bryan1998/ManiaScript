@@ -7,7 +7,7 @@
 
 #Extends "Modes/TrackMania/Base/ModeTrackMania.Script.txt"
 
-#Const Version "0.1.3-alpha"
+#Const Version "0.1.1-alpha"
 #Const ScriptName "Platform.Script.txt"
 #Const ComaptibleMaptypes "Platform"
 
@@ -70,9 +70,8 @@ ST2::SetFooterText(TL::Compose("%1 "^TL::TimeToText(S_TimeLimit*1000, False), _(
 ST2::Build("TM");
 
 RespawnBehaviour::Set(CTmMode::ETMRespawnBehaviour::GiveUpBeforeFirstCheckPoint);
-				
+	
 declare Ident[][Integer] TopRuns; // array of ALL runs, ordered by respawns, and then by time (first to finish first)
-
 declare Integer PrevTimeLimit = S_TimeLimit;
 declare Integer StartTime;
 declare MatchStartTime = Now + 2000;
@@ -117,8 +116,6 @@ foreach (Player in PlayersWaiting) {
 // Manage events
 foreach (Event in PendingEvents) {
 	Events::Valid(Event);
-	
-	
 	if (Event.Type == CTmModeEvent::EType::WayPoint) {
 		declare FurthestCheckpointReached for Event.Player.Score = 0;
 		declare FurthestCheckpointReached_Time for Event.Player.Score = 0;
@@ -136,7 +133,18 @@ foreach (Event in PendingEvents) {
 		declare Time = Player.CurRace.Time;
 		TM::EndRace(Event.Player);
 		Player.Score.PrevRace = Player.CurRace;
-	}
+		//Scores Table
+		}
+		declare Integer[Ident] NbRunsPerScore;
+		declare MaxNbRuns = 0;
+		foreach(NbRespawns => Runs in TopRuns) {
+			foreach(ScoreId in Runs) {						
+				if (!NbRunsPerScore.existskey(ScoreId)) NbRunsPerScore[ScoreId] = 0;
+				NbRunsPerScore[ScoreId] += 1;
+				if (NbRunsPerScore[ScoreId] > MaxNbRuns) MaxNbRuns = NbRunsPerScore[ScoreId];	
+			}
+		}
+
 		declare Text[Ident] SortStringPerScore;	
 		declare Text[Ident] DisplayStringPerScore;				
 		foreach(NbRespawns => Runs in TopRuns) {
@@ -145,54 +153,16 @@ foreach (Event in PendingEvents) {
 					SortStringPerScore[ScoreId] = "";
 					DisplayStringPerScore[ScoreId] = "";
 				}
-				SortStringPerScore[ScoreId] ^= " " ^ TL::FormatInteger(NbRespawns, 3);
+				SortStringPerScore[ScoreId] ^= " " ^ TextLib::FormatInteger(NbRespawns, 3);
 				
-				declare Len = TL::Length(DisplayStringPerScore[ScoreId]);
+				declare Len = TextLib::Length(DisplayStringPerScore[ScoreId]);
 				if (Len < 10) {
 					if(Len != 0) DisplayStringPerScore[ScoreId] ^= "-";
 					DisplayStringPerScore[ScoreId] ^= NbRespawns;
 				}
 			}
 		}
-		
-
-		// We add fake very bad runs 
-		foreach(ScoreId => String in SortStringPerScore) {
-			for(I, NbRunsPerScore[ScoreId]+1, MaxNbRuns) {
-				SortStringPerScore[ScoreId] ^= " XXX";
-			}
-		}
-		
-		//  add the players that haven't reached the finish yet.
-		foreach(Score in Scores) {
-			declare FurthestCheckpointReached for Score = 0;
-			declare FurthestCheckpointReached_Time for Score = 0;
-			declare FurthestCheckpointReached_NbRespawns for Score = 9999;
-			
-			if (FurthestCheckpointReached == 0)
-				continue;
-			if (SortStringPerScore.existskey(Score.Id))
-				continue;
-				
-			SortStringPerScore[Score.Id] = " XXX c" ^ TL::FormatInteger(999-FurthestCheckpointReached, 3) ^ " " ^ TL::FormatInteger(FurthestCheckpointReached_NbRespawns, 3) ^ " " ^ TL::FormatInteger(FurthestCheckpointReached_Time-MatchStartTime,10);
-			DisplayStringPerScore[Score.Id] = "$E76(-"^ (RaceCheckpoints+1)-FurthestCheckpointReached ^")$z " ^ FurthestCheckpointReached_NbRespawns;
-		}
-
-		SortStringPerScore = SortStringPerScore.sort();
-		
-		foreach( Score in Scores ) {
-			declare FurthestCheckpointReached for Score = 0;
-			if (FurthestCheckpointReached != 0)
-				Score.LadderRankSortValue = SortStringPerScore.count+1;
-			else
-				Score.LadderRankSortValue = 0;	// not in ladder.
-		}
-		declare I = 1;
-		foreach( ScoreId => String in SortStringPerScore ) {
-			Scores[ScoreId].LadderRankSortValue = I;
-			I += 1;
-		}
-	}			
+	}
 }
 ***
 
@@ -311,12 +281,17 @@ Text PlatformUI() {
 	</manialink>
 """;
 }
+/** Update the time limit
+ *
+ *	@param	_StartTime								The starting time of the map
+ *	@param	_NewTimeLimit							The time limit before going to the next map
+ */
 Void SetTimeLimit(Integer _StartTime, Integer _NewTimeLimit) {
 	if (_NewTimeLimit <= 0) {
 		CutOffTimeLimit = -1;
-		ST2::SetFooterText(TL::Compose("%1 -", _("Time Limit :")));
+		if (Hud != Null) Hud.ScoresTable.SetFooterText(TL::Compose("%1 -", _("Time Limit :")));
 	} else {
 		CutOffTimeLimit = _StartTime + (S_TimeLimit * 1000);
-		ST2::SetFooterText(TL::Compose("%1 "^TL::TimeToText(S_TimeLimit * 1000, False), _("Time Limit :")));
+		if (Hud != Null) Hud.ScoresTable.SetFooterText(TL::Compose("%1 "^TL::TimeToText(S_TimeLimit*1000, False), _("Time Limit :")));
 	}
 }
