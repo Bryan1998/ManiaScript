@@ -7,7 +7,7 @@
 
 #Extends "Modes/TrackMania/Base/ModeTrackMania.Script.txt"
 
-#Const Version "0.2.2-alpha"
+#Const Version "0.2.4-alpha"
 #Const ScriptName "Platform.Script.txt"
 #Const ComaptibleMaptypes "Platform"
 
@@ -145,19 +145,21 @@ foreach (Event in PendingEvents) {
 		//to calc scores.. make up your own algorithm..
 		//but here's some idea:
 		//respawn score:
-		declare Integer RespawnScore for Player.Score;
-		RespawnScore = 0;
+		declare Integer[] RespawnTotal;
 		foreach (NbRespawns in Respawns) {
-		
+			
 		}
+		declare FUCKTHISSHIT = NbRespawns;
 		//number of runs: (just a plain number of runs)
 		declare Integer NbRuns for Player.Score;
 		//total score:
-		ST2::SetColValue("RespawnScore",	Event.Player.Score, TL::ToText(NbRespawns));
-		/*to encourage players to make more runs, divide RespawnScore by Respawns.count
+		ST2::SetColValue("RespawnScore",	Event.Player.Score, TL::ToText(FUCKTHISSHIT));
+		/*
+		to encourage players to make more runs, divide RespawnScore by Respawns.count
 		and to make difference between 0-0-0 and 0-0-0-0 you can also substract Respawns.count from RespawnScore.
 		then make base value of RespawnScore to some big value, such as 100
-		and beware of division by zero*/
+		and beware of division by zero
+		*/
 	}
 }
 ***
