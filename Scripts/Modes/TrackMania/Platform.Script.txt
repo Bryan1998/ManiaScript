@@ -134,7 +134,7 @@ foreach (Event in PendingEvents) {
 		TM::EndRace(Event.Player);
 		Player.Score.PrevRace = Player.CurRace;
 		
-		
+		//Scores based off of RIscRIpt's code
 		declare Integer[] Respawns for Player; //use this everywhere where you need to know # of respawns for a player
 		declare Integer NewNbRespawns;
 		//to add # of respawns to the list
