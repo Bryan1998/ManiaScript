@@ -147,7 +147,9 @@ foreach (Event in PendingEvents) {
 		//respawn score:
 		declare Integer[] RespawnTotal;
 		foreach (NbRespawns in Respawns) {
-			
+			//HELP!
+			//I'm trying to put all the respawns in an array, then list them seperated by a "-"
+			//I'm just at a loss and very frustrated (as evidenced by my alias for NbRespawns^^
 		}
 		declare FUCKTHISSHIT = NbRespawns;
 		//number of runs: (just a plain number of runs)
