@@ -11,15 +11,17 @@
 #Const ScriptName "Platform.Script.txt"
 #Const ComaptibleMaptypes "Platform"
 
+#Include "MathLib" as ML
 #Include "TextLib" as TL
 #Include "Libs/Nadeo/ScoresTable2.Script.txt" as ST2
 
+#Setting	S_KPH				True	as _("Displaying speed in KPH (else MPH)")
 #Setting	S_TimeLimit	0 		as _("Time Limit :")
 #Setting 	S_ScriptEnvironment "development"
 
 #Const Description _("""$fff In $f00Platform$fff mode you need to finish the map while accumulating the $ff0least amount of respawns while finishing the most times$fff.""")
 #Const C_BotsNb 0
-
+#Const C_KPHToMPH 0.621371192
   //-------------------------------//
  //-----------|Extends|-----------//
 //-------------------------------//
@@ -66,7 +68,6 @@ ST2::SetFooterText(TL::Compose("%1 "^TL::TimeToText(S_TimeLimit*1000, False), _(
 ST2::Build("TM");
 
 RespawnBehaviour::Set(CTmMode::ETMRespawnBehaviour::GiveUpBeforeFirstCheckPoint);
-
 declare Integer PrevTimeLimit = S_TimeLimit;
 declare Integer StartTime;
 declare MatchStartTime = Now + 2000;
@@ -95,7 +96,6 @@ if (PrevTimeLimit != S_TimeLimit) {
 	PrevTimeLimit = S_TimeLimit;
 	SetTimeLimit(StartTime, S_TimeLimit);
 }
-
   //-----------------------------//
  //--------|Spawn players|------//
 //-----------------------------//
@@ -107,6 +107,7 @@ foreach (Player in PlayersWaiting) {
 		CurrentUI.OverlayHideCheckPointList = True;
 		CurrentUI.OverlayHidePersonnalBestAndRank = True;
 		TM::StartRace(Player);
+		
 	}
 }
 //Manage events
@@ -139,8 +140,7 @@ foreach (Event in PendingEvents) {
 		if(!TopRuns.existskey(NbRespawns)) TopRuns[NbRespawns] = Ident[];
 		if(Player.Score != Null) {
 			if (Player.Score.Id != NullId) {
-			TopRuns[NbRespawns].add(Player.Score.Id);
-			Top10_Dirty = True;	
+			TopRuns[NbRespawns].add(Player.Score.Id);	
 			ScoresDirty = True;
 		}
 		
@@ -257,20 +257,23 @@ Layers::Destroy("PlatformUI");
   //-----------------------------------//
  //-------------|Functions|-----------//
 //-----------------------------------//
-
-
 //Manialink Overlay
 Text PlatformUI() {
 	return """
 	<manialink version="3">
+		<style class="text-default" textfont="Oswald" textcolor="fff" textemboss="1"/>
+		<style class="text-number" textfont="OswaldMono" textcolor="fff" textemboss="1"/>
 		<frame pos="0 -75" z-index="0">
-			<quad pos="-20 1" z-index="-1" size="40 10" style="Bgs1InRace" substyle="BgList"/>
-			<label id="LabelRespawns" pos="0 -3" z-index="0" style="TextRaceChrono" size="30 5" halign="center" valign="center" text="0"  />
-			<label id="LabelCheckpoint" pos="0 6" z-index="0" style="TextRaceMessage" size="30 2" halign="center" text=""  />
-			<label id="LabelPrevBest" pos="0 -9" z-index="0" style="TextRaceMessage" size="30 1" scale="0.5" halign="center" text="Best: ???"  />			
+			<label id="LabelRespawns" pos="0 3" z-index="0" class="text-number" scale="3" size="30 5" halign="center" valign="center" text="0"  />
+			<label id="LabelCheckpoint" pos="0 6" z-index="0" class="text-default" size="30 2" halign="center" text=""  />
+			<label class="text-default" pos="0 -6" z-index="0" size="30 5" scale="1" halign="center" text="Respawns" />			
+		</frame>
+		<frame pos="150 -75" z-index="0">
+			<label pos="0 0" class="text-number" size="30 5" scale="1" halign="center" text="" />
 		</frame>
 		<script><!--
 			#Include "TextLib" as TL
+			#Include "MathLib" as ML
 			declare Integer[CMlLabel] UIAnims_BlinkLabels;
 			declare Integer[CMlLabel] UIAnims_SplashLabels;
 			Void BlinkLabel(CMlLabel _Label, Text _Text) {
@@ -310,7 +313,7 @@ Text PlatformUI() {
 			main () {
 				declare LabelRespawns <=> (Page.GetFirstChild("LabelRespawns") as CMlLabel);
 				declare LabelCheckpoint <=> (Page.GetFirstChild("LabelCheckpoint") as CMlLabel);
-				declare LabelBest <=> (Page.GetFirstChild("LabelPrevBest") as CMlLabel);
+				//declare LabelBest <=> (Page.GetFirstChild("LabelPrevBest") as CMlLabel);
 				LabelCheckpoint.Hide();
 				LabelRespawns.Value = "0";
 				
@@ -319,12 +322,10 @@ Text PlatformUI() {
 				while(True) {
 					UIAnims_Update();
 					yield;
-
-					declare NbRespawnsText = "???";
+					/*declare NbRespawnsText = "???";
 					if (GUIPlayer != Null && GUIPlayer == InputPlayer && BestScore_NbRespawns != -1)
 						NbRespawnsText = TL::ToText(BestScore_NbRespawns);
-					LabelBest.Value = TL::Compose(_("Best: %1"), NbRespawnsText);		
-					
+					LabelBest.Value = TL::Compose(_("Best: %1"), NbRespawnsText);*/
 					//For now we just show the best of the local player.
 					//We could use a declare netread for player to have it on each player, sent by the server. (TODO.)
 					
@@ -354,12 +355,7 @@ Text PlatformUI() {
 	</manialink>
 """;
 }
-declare Ident[][Integer]	TopRuns; // array of ALL runs, ordered by respawns, and then by time (first to finish first)
-declare Boolean						Top10_Dirty;
-/*declare Integer BestNbRespawns;
-declare BestNbRespawns <=> Player.Score.BestRace;
-declare UI <=> UIManager.GetUI(Player);
-declare netwrite Integer BestNbRespawns for UI;*/
+declare Ident[][Integer] TopRuns; // array of ALL runs, ordered by respawns, and then by time (first to finish first)
 Boolean IsRaceBetter(CTmResult _Race1, CTmResult _Race2)
 {
 	declare Comp = _Race1.Compare(_Race2, CTmResult::ETmRaceResultCriteria::NbRespawns);
@@ -379,4 +375,10 @@ Void SetTimeLimit(Integer _StartTime, Integer _NewTimeLimit) {
 		CutOffTimeLimit = _StartTime + (S_TimeLimit * 1000);
 		if (Hud != Null) Hud.ScoresTable.SetFooterText(TL::Compose("%1 "^TL::TimeToText(S_TimeLimit*1000, False), _("Time Limit :")));
 	}
+}
+Integer ConvertToCurrentSpeedMode(Integer _Speed) {
+	if (S_KPH)
+		return _Speed;
+	
+	return ML::NearestInteger(_Speed * C_KPHToMPH);
 }
