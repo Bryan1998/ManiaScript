@@ -21,7 +21,6 @@
 
 #Const Description _("""$fff In $f00Platform$fff mode you need to finish the map while accumulating the $ff0least amount of respawns while finishing the most times$fff.""")
 #Const C_BotsNb 0
-#Const C_KPHToMPH 0.621371192
   //-------------------------------//
  //-----------|Extends|-----------//
 //-------------------------------//
@@ -42,7 +41,7 @@ ChannelProgression::Enable(S_IsChannelServer);
 ModeInfo::SetName("Platform");
 ModeInfo::SetType(ModeInfo::C_Type_FreeForAll);
 ModeInfo::SetRules(Description);
-ModeInfo::SetStatusMessage(_("TYPE: Free for all\nOBJECTIVE: Set the least amount of respawns while having the most finishes."));
+ModeInfo::SetStatusMessage(_("TYPE: Free for all\nOBJECTIVE: Set the least amount of respawns while having the most finishes first."));
 ***
 
 ***Match_LoadHud***
@@ -259,21 +258,25 @@ Layers::Destroy("PlatformUI");
 //-----------------------------------//
 //Manialink Overlay
 Text PlatformUI() {
+	declare CTmMlPlayer CurMlPlayer;
+	CurMlPlayer = DisplaySpeed;
+	declare Real CurSpeed = CurMlPlayer.DisplaySpeed;
+	
 	return """
 	<manialink version="3">
 		<style class="text-default" textfont="Oswald" textcolor="fff" textemboss="1"/>
 		<style class="text-number" textfont="OswaldMono" textcolor="fff" textemboss="1"/>
 		<frame pos="0 -75" z-index="0">
-			<label id="LabelRespawns" pos="0 3" z-index="0" class="text-number" scale="3" size="30 5" halign="center" valign="center" text="0"  />
-			<label id="LabelCheckpoint" pos="0 6" z-index="0" class="text-default" size="30 2" halign="center" text=""  />
-			<label class="text-default" pos="0 -6" z-index="0" size="30 5" scale="1" halign="center" text="Respawns" />			
+			<quad pos="-20 1" z-index="-1" size="60 20" style="Bgs1InRace" substyle="BgCardList"/>
+			<label id="LabelRespawns" pos="0 3" z-index="0" class="text-number" scale="3.0" size="30 5" halign="center" valign="center" text="0"  />
+			<label id="LabelCheckpoint" pos="-15 15" z-index="0" class="text-default" size="30 2" scale="1.5" halign="center" text=""/>
+			<label class="text-default" pos="0 -6" z-index="0" size="30 5" halign="center" scale="1" text="Respawns" />
 		</frame>
 		<frame pos="150 -75" z-index="0">
-			<label pos="0 0" class="text-number" size="30 5" scale="1" halign="center" text="" />
+			<label pos="0 0" class="text-number" size="30 5" scale="1" halign="center" text="{{{CurMlPlayer.DisplaySpeed}}}" />
 		</frame>
 		<script><!--
 			#Include "TextLib" as TL
-			#Include "MathLib" as ML
 			declare Integer[CMlLabel] UIAnims_BlinkLabels;
 			declare Integer[CMlLabel] UIAnims_SplashLabels;
 			Void BlinkLabel(CMlLabel _Label, Text _Text) {
@@ -293,7 +296,7 @@ Text PlatformUI() {
 			Void UIAnims_Update()
 			{
 				foreach(Label => Time in UIAnims_BlinkLabels) {
-					if (Now > Time && Now < Time + 1000)
+					if (Now > Time && Now < Time + 2000)
 						Label.Show();
 					else
 						Label.Hide();
@@ -301,11 +304,11 @@ Text PlatformUI() {
 				foreach(Label => Time in UIAnims_SplashLabels) {
 					if (Now >= Time && Now < Time + 500) {
 						declare t = (Now-Time)/500.0;
-						Label.Scale = 1.0 + 0.5*((t-1.0)*(t-1.0));
+						Label.Scale = 3.0 + 1.5*((t-1.0)*(t-1.0));
 					} else {
 						declare PureValue for Label = /*default*/ Label.Value;
 						Label.Value = PureValue;
-						Label.Scale = 1.0;
+						Label.Scale = 3.0;
 					}
 				}
 				
@@ -375,10 +378,4 @@ Void SetTimeLimit(Integer _StartTime, Integer _NewTimeLimit) {
 		CutOffTimeLimit = _StartTime + (S_TimeLimit * 1000);
 		if (Hud != Null) Hud.ScoresTable.SetFooterText(TL::Compose("%1 "^TL::TimeToText(S_TimeLimit*1000, False), _("Time Limit :")));
 	}
-}
-Integer ConvertToCurrentSpeedMode(Integer _Speed) {
-	if (S_KPH)
-		return _Speed;
-	
-	return ML::NearestInteger(_Speed * C_KPHToMPH);
 }
