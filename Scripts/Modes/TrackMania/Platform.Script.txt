@@ -7,7 +7,7 @@
 
 #Extends "Modes/TrackMania/Base/ModeTrackMania.Script.txt"
 
-#Const Version "0.5.0-beta"
+#Const Version "0.5.1-beta"
 #Const ScriptName "Platform.Script.txt"
 #Const ComaptibleMaptypes "Platform"
 
@@ -46,7 +46,7 @@ ModeInfo::SetStatusMessage(_("TYPE: Free for all\nOBJECTIVE: Set the least amoun
 
 ***Match_LoadHud***
 ***
-// Initialize UI modules
+//Initialize UI modules
 UI::LoadModules([UIModules::C_Module_SpeedAndDistance, UIModules::C_Module_Countdown]);
 UI::SetTimeGapMode("BestRace_NbRespawns");
 UI::SetCheckpointTimeMode("BestRace_NbRespawns");
@@ -89,8 +89,8 @@ Layers::Attach("PlatformUI");
 
 ***Match_PlayLoop***
 ***
-// ---------------------------------- //
-// Update the map duration setting
+ //----------------------------------//
+//Update the map duration setting
 if (PrevTimeLimit != S_TimeLimit) {
 	PrevTimeLimit = S_TimeLimit;
 	SetTimeLimit(StartTime, S_TimeLimit);
@@ -253,30 +253,27 @@ ST2::Unload();
 Scores_Clear();
 Layers::Destroy("PlatformUI");
 ***
-  //-----------------------------------//
- //-------------|Functions|-----------//
-//-----------------------------------//
-//Manialink Overlay
+   //-----------------------------------//
+  //-------------|Functions|-----------//
+ //-----------------------------------//
+//---------|Manialink Overlay|-------//
 Text PlatformUI() {
-	declare CTmMlPlayer CurMlPlayer;
-	CurMlPlayer = DisplaySpeed;
-	declare Real CurSpeed = CurMlPlayer.DisplaySpeed;
 	
 	return """
 	<manialink version="3">
 		<style class="text-default" textfont="Oswald" textcolor="fff" textemboss="1"/>
 		<style class="text-number" textfont="OswaldMono" textcolor="fff" textemboss="1"/>
 		<frame pos="0 -75" z-index="0">
-			<quad pos="-20 1" z-index="-1" size="60 20" style="Bgs1InRace" substyle="BgCardList"/>
 			<label id="LabelRespawns" pos="0 3" z-index="0" class="text-number" scale="3.0" size="30 5" halign="center" valign="center" text="0"  />
-			<label id="LabelCheckpoint" pos="-15 15" z-index="0" class="text-default" size="30 2" scale="1.5" halign="center" text=""/>
-			<label class="text-default" pos="0 -6" z-index="0" size="30 5" halign="center" scale="1" text="Respawns" />
+			<label id="LabelCheckpoint" pos="0 15" z-index="0" class="text-default" size="30 2" scale="1" halign="center" text=""/>
+			<label class="text-default" pos="0 -6" z-index="0" size="30 5" halign="center" scale=".75" text="Respawns" />
 		</frame>
-		<frame pos="150 -75" z-index="0">
-			<label pos="0 0" class="text-number" size="30 5" scale="1" halign="center" text="{{{CurMlPlayer.DisplaySpeed}}}" />
+		<frame pos="0 0" z-index="0">
+			<label pos="0 0" class="text-number" size="30 5" scale="1" halign="center" text="" />
 		</frame>
 		<script><!--
 			#Include "TextLib" as TL
+			#Include "AnimLib" as AL
 			declare Integer[CMlLabel] UIAnims_BlinkLabels;
 			declare Integer[CMlLabel] UIAnims_SplashLabels;
 			Void BlinkLabel(CMlLabel _Label, Text _Text) {
@@ -296,7 +293,7 @@ Text PlatformUI() {
 			Void UIAnims_Update()
 			{
 				foreach(Label => Time in UIAnims_BlinkLabels) {
-					if (Now > Time && Now < Time + 2000)
+					if (Now > Time && Now < Time + 3000)
 						Label.Show();
 					else
 						Label.Hide();
